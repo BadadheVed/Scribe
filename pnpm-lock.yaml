@@ -14,11 +14,11 @@ importers:
         specifier: latest
         version: 7.0.0(prisma@7.0.0(@types/react@19.2.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(typescript@5.9.3))(typescript@5.9.3)
       dotenv:
-        specifier: ^17.2.3
+        specifier: latest
         version: 17.2.3
     devDependencies:
       '@types/node':
-        specifier: ^24.10.1
+        specifier: latest
         version: 24.10.1
       prisma:
         specifier: latest
