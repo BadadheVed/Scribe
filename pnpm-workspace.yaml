@@ -1,0 +1,4 @@
+packages:
+  - "nextjs"
+  - "ws"
+  - "db"
