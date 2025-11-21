@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { io, Socket } from "socket.io-client";
 import RecordingControls from "../recording/recording-controls";
+import SessionDetailsModal from "./session-details-modal";
 
 interface User {
   id: string;
@@ -10,14 +12,149 @@ interface User {
   email: string;
 }
 
+interface RecordingSession {
+  id: string;
+  title: string;
+  sourceType: string;
+  status: string;
+  duration?: number;
+  createdAt: string;
+  summary?: {
+    fullText: string;
+    keyPoints: string[];
+    actionItems: string[];
+  };
+}
+
 export default function DashboardClient({ user }: { user: User }) {
   const router = useRouter();
   const [showRecordingModal, setShowRecordingModal] = useState(false);
+  const [sessions, setSessions] = useState<RecordingSession[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(true);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    null
+  );
+  const socketRef = useRef<Socket | null>(null);
+
+  // Initialize socket connection once when dashboard loads
+  useEffect(() => {
+    console.log("🔌 Initializing WebSocket connection for user:", user.id);
+
+    const socket = io(
+      process.env.NEXT_PUBLIC_WS_URL || "http://localhost:4000",
+      {
+        auth: { userId: user.id },
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+      }
+    );
+
+    socket.on("connect", () => {
+      console.log("✅ WebSocket connected successfully");
+    });
+
+    socket.on("disconnect", () => {
+      console.log("WebSocket disconnected");
+    });
+
+    socket.on("error", (error) => {
+      console.error("❌ WebSocket error:", error);
+    });
+
+    socketRef.current = socket;
+
+    // Cleanup on unmount - don't disconnect, just remove listeners
+    return () => {
+      console.log(
+        "🔌 Cleaning up dashboard socket listeners (keeping connection alive)"
+      );
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.off("error");
+      // Only disconnect if user is actually leaving (not just hot reload)
+      if (
+        typeof window !== "undefined" &&
+        !window.location.pathname.startsWith("/dashboard")
+      ) {
+        socket.disconnect();
+      }
+    };
+  }, [user.id]);
+
+  // Fetch user's recording sessions
+  useEffect(() => {
+    const fetchSessions = async () => {
+      try {
+        const response = await fetch("/api/sessions");
+        if (response.ok) {
+          const data = await response.json();
+          setSessions(data.sessions || []);
+        }
+      } catch (error) {
+        console.error("Error fetching sessions:", error);
+      } finally {
+        setLoadingSessions(false);
+      }
+    };
+
+    fetchSessions();
+  }, []);
+
+  const refreshSessions = async () => {
+    try {
+      const response = await fetch("/api/sessions");
+      if (response.ok) {
+        const data = await response.json();
+        setSessions(data.sessions || []);
+      }
+    } catch (error) {
+      console.error("Error refreshing sessions:", error);
+    }
+  };
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
   };
+
+  const handleCloseRecording = () => {
+    setShowRecordingModal(false);
+    refreshSessions(); // Refresh sessions list after recording
+  };
+
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 60) {
+      return `${diffMins} minutes ago`;
+    } else if (diffMins < 1440) {
+      const hours = Math.floor(diffMins / 60);
+      return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+    } else {
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+  };
+
+  const totalRecordings = sessions.length;
+  const totalDuration = sessions.reduce(
+    (acc, session) => acc + (session.duration || 0),
+    0
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -88,7 +225,7 @@ export default function DashboardClient({ user }: { user: User }) {
                         Total Recordings
                       </dt>
                       <dd className="text-lg font-medium text-gray-900 dark:text-white">
-                        0
+                        {totalRecordings}
                       </dd>
                     </dl>
                   </div>
@@ -121,7 +258,7 @@ export default function DashboardClient({ user }: { user: User }) {
                         Total Duration
                       </dt>
                       <dd className="text-lg font-medium text-gray-900 dark:text-white">
-                        0 min
+                        {Math.floor(totalDuration / 60)} min
                       </dd>
                     </dl>
                   </div>
@@ -173,19 +310,109 @@ export default function DashboardClient({ user }: { user: User }) {
               Recent Sessions
             </h2>
             <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
-              <div className="px-4 py-5 sm:p-6 text-center text-gray-500 dark:text-gray-400">
-                No recording sessions yet. Click "Start Recording" to begin!
-              </div>
+              {loadingSessions ? (
+                <div className="px-4 py-5 sm:p-6 text-center text-gray-500 dark:text-gray-400">
+                  Loading sessions...
+                </div>
+              ) : sessions.length === 0 ? (
+                <div className="px-4 py-5 sm:p-6 text-center text-gray-500 dark:text-gray-400">
+                  No recording sessions yet. Click "Start Recording" to begin!
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {sessions.map((session) => (
+                    <li key={session.id}>
+                      <button
+                        onClick={() => setSelectedSessionId(session.id)}
+                        className="w-full px-4 py-4 sm:px-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-base font-medium text-gray-900 dark:text-white truncate">
+                              {session.title || "Untitled Recording"}
+                            </h3>
+                            <div className="mt-2 flex items-center text-sm text-gray-500 dark:text-gray-400 gap-4">
+                              <span className="flex items-center gap-1">
+                                <svg
+                                  className="h-4 w-4"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                  />
+                                </svg>
+                                {formatDuration(session.duration)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <svg
+                                  className="h-4 w-4"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                  />
+                                </svg>
+                                {formatDate(session.createdAt)}
+                              </span>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                {session.sourceType}
+                              </span>
+                            </div>
+                            {session.summary && (
+                              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                                {session.summary.fullText}
+                              </p>
+                            )}
+                          </div>
+                          <div className="ml-4 shrink-0">
+                            <svg
+                              className="h-5 w-5 text-gray-400"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 5l7 7-7 7"
+                              />
+                            </svg>
+                          </div>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </div>
       </main>
 
       {/* Recording Controls Modal */}
-      {showRecordingModal && (
+      {showRecordingModal && socketRef.current && (
         <RecordingControls
-          userId={user.id}
-          onClose={() => setShowRecordingModal(false)}
+          socket={socketRef.current}
+          onClose={handleCloseRecording}
+        />
+      )}
+
+      {/* Session Details Modal */}
+      {selectedSessionId && (
+        <SessionDetailsModal
+          sessionId={selectedSessionId}
+          onClose={() => setSelectedSessionId(null)}
         />
       )}
     </div>
