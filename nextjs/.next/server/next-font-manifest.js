@@ -1,1 +1,0 @@
-self.__NEXT_FONT_MANIFEST="{\"pages\":{},\"app\":{\"/Users/ved/attack-capital/nextjs/app/layout\":[\"static/media/4cf2300e9c8272f7.p.woff2\",\"static/media/93f479601ee12b01.p.woff2\"]},\"appUsingSizeAdjust\":false,\"pagesUsingSizeAdjust\":false}"
