@@ -5,8 +5,9 @@ import { prisma } from "@attack-capital/db";
 // GET /api/sessions/[id] - Get a specific session
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -15,7 +16,7 @@ export async function GET(
 
     const session = await prisma.recordingSession.findFirst({
       where: {
-        id: params.id,
+        id: id,
         userId: user.id,
       },
       include: {
@@ -43,8 +44,9 @@ export async function GET(
 // PATCH /api/sessions/[id] - Update a session
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -56,7 +58,7 @@ export async function PATCH(
 
     const session = await prisma.recordingSession.updateMany({
       where: {
-        id: params.id,
+        id: id,
         userId: user.id,
       },
       data: {
@@ -71,7 +73,7 @@ export async function PATCH(
     }
 
     const updatedSession = await prisma.recordingSession.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     return NextResponse.json({ session: updatedSession });
@@ -87,8 +89,9 @@ export async function PATCH(
 // DELETE /api/sessions/[id] - Delete a session
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -97,7 +100,7 @@ export async function DELETE(
 
     const session = await prisma.recordingSession.deleteMany({
       where: {
-        id: params.id,
+        id: id,
         userId: user.id,
       },
     });

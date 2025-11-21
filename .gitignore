@@ -18,8 +18,9 @@ coverage
 /.cache
 /public/build
 /.parcel-cache
-/.turbo
+/turbo
 .pnp
+.next
 
 
 # OS generated files

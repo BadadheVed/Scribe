@@ -24,7 +24,7 @@ export async function transcribeAudioChunk(
   timestamp: number
 ): Promise<TranscriptionResult> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // Convert audio buffer to base64
     const audioBase64 = audioBuffer.toString("base64");
@@ -60,7 +60,7 @@ export async function generateSummary(
   fullTranscript: string
 ): Promise<SummaryResult> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const prompt = `
 Analyze the following meeting transcript and provide a comprehensive summary in JSON format:

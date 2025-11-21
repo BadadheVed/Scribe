@@ -12,21 +12,16 @@ export const authenticateSocket = async (
   next: (err?: Error) => void
 ) => {
   try {
-    // Get token from handshake auth or cookies
-    const token =
-      socket.handshake.auth.token ||
-      socket.handshake.headers.cookie?.split("auth-token=")[1]?.split(";")[0];
+    // Get userId directly from handshake auth (passed from client)
+    const userId = socket.handshake.auth.userId;
 
-    if (!token) {
-      return next(new Error("Authentication error: No token provided"));
+    if (!userId) {
+      return next(new Error("Authentication error: No userId provided"));
     }
-
-    const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
-    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
 
     // Verify user exists in database
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
+      where: { id: userId },
     });
 
     if (!user) {

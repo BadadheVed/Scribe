@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import RecordingControls from "../recording/recording-controls";
 
 interface User {
   id: string;
@@ -10,6 +12,7 @@ interface User {
 
 export default function DashboardClient({ user }: { user: User }) {
   const router = useRouter();
+  const [showRecordingModal, setShowRecordingModal] = useState(false);
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -151,7 +154,10 @@ export default function DashboardClient({ user }: { user: User }) {
                         Quick Actions
                       </dt>
                       <dd className="mt-1">
-                        <button className="text-sm font-medium text-blue-600 hover:text-blue-500">
+                        <button
+                          onClick={() => setShowRecordingModal(true)}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                        >
                           Start Recording →
                         </button>
                       </dd>
@@ -174,6 +180,14 @@ export default function DashboardClient({ user }: { user: User }) {
           </div>
         </div>
       </main>
+
+      {/* Recording Controls Modal */}
+      {showRecordingModal && (
+        <RecordingControls
+          userId={user.id}
+          onClose={() => setShowRecordingModal(false)}
+        />
+      )}
     </div>
   );
 }

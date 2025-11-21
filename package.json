@@ -15,5 +15,10 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "dotenv": "^16.6.1",
+    "tsx": "^4.20.6"
   }
 }
