@@ -1,16 +1,19 @@
 {
-    "name": "@attack-capital/db",
-    "private": true,
-    "version": "1.0.0",
-    "main": "index.ts",
-    "types": "index.ts",
-    "dependencies": {
-        "@prisma/client": "latest",
-        "dotenv": "latest"
-    },
-    "devDependencies": {
-        "prisma": "latest",
-        "typescript": "latest",
-        "@types/node": "latest"
-    }
+  "name": "@attack-capital/db",
+  "version": "1.0.0",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "studio": "prisma studio",
+    "push": "prisma db push"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0",
+    "typescript": "^5.3.3"
+  }
 }

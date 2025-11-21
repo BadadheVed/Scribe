@@ -1,4 +1,19 @@
 {
-    "name": "attack-capital",
-    "private": true
+  "name": "attack-capital",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "nextjs",
+    "ws",
+    "db"
+  ],
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter nextjs dev\" \"pnpm --filter ws dev\"",
+    "build": "pnpm --filter db generate && pnpm --filter nextjs build && pnpm --filter ws build",
+    "db:migrate": "pnpm --filter db migrate",
+    "db:studio": "pnpm --filter db studio"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
 }

@@ -1,13 +1,135 @@
 generator client {
-  provider = "prisma-client"
+    provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
 }
 
+// User model for Better Auth
 model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  name  String?
+    id            String   @id @default(cuid())
+    name          String?
+    email         String   @unique
+    emailVerified Boolean  @default(false)
+    image         String?
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+
+    accounts          Account[]
+    sessions          Session[]
+    recordingSessions RecordingSession[]
+}
+
+// Session model for Better Auth
+model Session {
+    id        String   @id @default(cuid())
+    userId    String
+    expiresAt DateTime
+    token     String   @unique
+    ipAddress String?
+    userAgent String?
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+}
+
+// Account model for Better Auth
+model Account {
+    id           String    @id @default(cuid())
+    userId       String
+    accountId    String
+    providerId   String
+    accessToken  String?
+    refreshToken String?
+    idToken      String?
+    expiresAt    DateTime?
+    password     String?
+    createdAt    DateTime  @default(now())
+    updatedAt    DateTime  @updatedAt
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([providerId, accountId])
+    @@index([userId])
+}
+
+// Verification model for Better Auth
+model Verification {
+    id         String   @id @default(cuid())
+    identifier String
+    value      String
+    expiresAt  DateTime
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+
+    @@unique([identifier, value])
+}
+
+// Recording Session model for ScribeAI
+model RecordingSession {
+    id         String          @id @default(cuid())
+    userId     String
+    title      String?
+    status     RecordingStatus @default(RECORDING)
+    sourceType AudioSourceType @default(MICROPHONE)
+    duration   Int             @default(0) // Duration in seconds
+    audioUrl   String? // URL to stored audio file
+    createdAt  DateTime        @default(now())
+    updatedAt  DateTime        @updatedAt
+
+    user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+    transcripts Transcript[]
+    summary     Summary?
+
+    @@index([userId])
+    @@index([status])
+}
+
+// Transcript model - stores chunked transcriptions
+model Transcript {
+    id         String   @id @default(cuid())
+    sessionId  String
+    text       String   @db.Text
+    timestamp  Int // Timestamp in seconds from start
+    speaker    String? // For diarization
+    confidence Float? // Transcription confidence score
+    createdAt  DateTime @default(now())
+
+    session RecordingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+    @@index([sessionId])
+    @@index([timestamp])
+}
+
+// Summary model - AI-generated summary after session
+model Summary {
+    id           String   @id @default(cuid())
+    sessionId    String   @unique
+    fullText     String   @db.Text
+    keyPoints    String[] // Array of key points
+    actionItems  String[] // Array of action items
+    decisions    String[] // Array of decisions
+    participants String[] // Detected participants
+    createdAt    DateTime @default(now())
+
+    session RecordingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+enum RecordingStatus {
+    RECORDING
+    PAUSED
+    PROCESSING
+    COMPLETED
+    FAILED
+}
+
+enum AudioSourceType {
+    MICROPHONE
+    TAB_SHARE
+    SCREEN_SHARE
 }

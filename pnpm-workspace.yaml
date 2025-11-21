@@ -1,4 +1,12 @@
 packages:
-  - "nextjs"
-  - "ws"
-  - "db"
+  - nextjs
+  - ws
+  - db
+
+ignoredBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - esbuild
+  - prisma
+  - sharp
+  - unrs-resolver
