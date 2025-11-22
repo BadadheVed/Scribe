@@ -43,7 +43,8 @@ Desktop.ini
 *.pid
 *.seed
 *.pid.lock
-
+test-recording-flow.ts
+test-long-recording.ts
 
 # IDE specific files
 *.sublime-project

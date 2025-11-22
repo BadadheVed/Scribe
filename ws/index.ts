@@ -31,6 +31,9 @@ const io = new Server(httpServer, {
     origin: process.env.BETTER_AUTH_URL || "http://localhost:3000",
     credentials: true,
   },
+  pingTimeout: 60000, // 60 seconds
+  pingInterval: 25000, // 25 seconds
+  maxHttpBufferSize: 1e8, // 100 MB (allow large audio chunks)
 });
 
 // Authentication middleware for Socket.IO
@@ -38,13 +41,18 @@ io.use(authenticateSocket);
 
 // Handle socket connections
 io.on("connection", (socket) => {
-  console.log(`Client connected: ${socket.id}, User: ${socket.data.userId}`);
+  console.log(`\n[Connection] Client connected`);
+  console.log(`   Socket ID: ${socket.id}`);
+  console.log(`   User ID: ${socket.data.userId}`);
+  console.log(`   User Email: ${socket.data.userEmail}\n`);
 
   // Register recording event handlers
   handleRecordingEvents(socket, io);
 
   socket.on("disconnect", () => {
-    console.log(`Client disconnected: ${socket.id}`);
+    console.log(`\n[Disconnect] Client disconnected`);
+    console.log(`   Socket ID: ${socket.id}`);
+    console.log(`   User ID: ${socket.data.userId}\n`);
   });
 });
 
