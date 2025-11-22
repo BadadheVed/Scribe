@@ -44,7 +44,7 @@ export const handleRecordingEvents = (socket: Socket, io: Server) => {
 
   socket.on("audio-chunk", async (data: AudioChunkData) => {
     try {
-      console.log(`\n📦 [Audio Chunk] Received from client`);
+      console.log(`\n[Audio Chunk] Received from client`);
       console.log(`   Session ID: ${data.sessionId}`);
       console.log(`   Timestamp: ${data.timestamp}s`);
       console.log(`   Size: ${data.chunk.length} bytes (base64)\n`);
@@ -61,7 +61,7 @@ export const handleRecordingEvents = (socket: Socket, io: Server) => {
 
       try {
         console.log(
-          `🎤 [Gemini] Requesting transcription for chunk at ${data.timestamp}s (${audioBuffer.length} bytes)...`
+          `[Gemini] Requesting transcription for chunk at ${data.timestamp}s (${audioBuffer.length} bytes)...`
         );
 
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
@@ -83,12 +83,12 @@ export const handleRecordingEvents = (socket: Socket, io: Server) => {
         transcriptionText = response.text().trim();
 
         console.log(
-          `✅ [Gemini] Response received for ${data.timestamp}s:`,
+          `[Gemini] Response received for ${data.timestamp}s:`,
           transcriptionText
         );
       } catch (transcriptionError) {
         console.error(
-          `❌ [Gemini] Transcription error at ${data.timestamp}s:`,
+          `[Gemini] Transcription error at ${data.timestamp}s:`,
           transcriptionError
         );
         transcriptionText = `[Transcription failed at ${data.timestamp}s]`;
@@ -97,7 +97,7 @@ export const handleRecordingEvents = (socket: Socket, io: Server) => {
 
       // Emit transcription progress to client
       console.log(`
-📤 [Server] Emitting transcription to client...`);
+[Server] Emitting transcription to client...`);
       console.log(`   Session: ${data.sessionId}`);
       console.log(`   Timestamp: ${data.timestamp}s`);
       console.log(`   Text: "${transcriptionText}"`);
@@ -109,7 +109,7 @@ export const handleRecordingEvents = (socket: Socket, io: Server) => {
         timestamp: data.timestamp,
       });
 
-      console.log(`✅ [Server] Transcription emitted successfully\n`);
+      console.log(`[Server] Transcription emitted successfully\n`);
 
       // 3. Store transcript in database
       await prisma.transcript.create({
@@ -178,7 +178,7 @@ export const handleRecordingEvents = (socket: Socket, io: Server) => {
       let summaryData = null;
       try {
         console.log(
-          `\n🤖 [Gemini] Generating summary for session ${sessionId}...`
+          `\n[Gemini] Generating summary for session ${sessionId}...`
         );
         console.log(
           `   Transcript length: ${fullTranscript.length} characters`
@@ -207,7 +207,7 @@ Be thorough but concise. Extract only factual information from the transcript.
         const response = await result.response;
         const text = response.text();
 
-        console.log(`✅ [Gemini] Summary response received`);
+        console.log(`[Gemini] Summary response received`);
 
         // Parse JSON from response
         const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -227,7 +227,7 @@ Be thorough but concise. Extract only factual information from the transcript.
           });
 
           console.log(
-            `✅ [Summary] Saved to database for session ${sessionId}`
+            `[Summary] Saved to database for session ${sessionId}`
           );
           console.log(
             `   Full Text: ${summaryData.fullText?.substring(0, 100)}...`
@@ -238,7 +238,7 @@ Be thorough but concise. Extract only factual information from the transcript.
           );
         }
       } catch (summaryError) {
-        console.error(`❌ [Summary] Error generating summary:`, summaryError);
+        console.error(`[Summary] Error generating summary:`, summaryError);
         // Create a basic summary even if AI fails
         await prisma.summary.create({
           data: {
@@ -259,7 +259,7 @@ Be thorough but concise. Extract only factual information from the transcript.
       });
 
       console.log(
-        `\n🎉 [Recording] Session ${sessionId} completed successfully\n`
+        `\n[Recording] Session ${sessionId} completed successfully\n`
       );
 
       io.to(`session-${sessionId}`).emit("processing-complete", {

@@ -45,14 +45,16 @@ export default function RecordingControls({
   const chunksRef = useRef<Blob[]>([]);
   const lastSentTimestampRef = useRef<number>(-1);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const chunkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const socketInstanceRef = useRef<Socket | null>(null);
+  const headerRef = useRef<Blob | null>(null);
 
   // Initialize socket connection when component mounts
   useEffect(() => {
     if (socketInstanceRef.current) return; // Prevent double initialization
 
-    console.log("🔌 Initializing WebSocket connection for recording...");
+    console.log("Initializing WebSocket connection for recording...");
     
     const newSocket = io(
       process.env.NEXT_PUBLIC_WS_URL || "http://localhost:4000",
@@ -69,7 +71,7 @@ export default function RecordingControls({
     setSocket(newSocket);
 
     return () => {
-      console.log("🔌 Disconnecting WebSocket...");
+      console.log("Disconnecting WebSocket...");
       newSocket.disconnect();
       socketInstanceRef.current = null;
       setSocket(null);
@@ -80,18 +82,18 @@ export default function RecordingControls({
   useEffect(() => {
     if (!socket) return;
 
-    console.log("🎧 Setting up socket event listeners");
+    console.log("Setting up socket event listeners");
 
     socket.on("connect", () => {
-      console.log("✅ Socket connected successfully");
+      console.log("Socket connected successfully");
     });
 
     socket.on("disconnect", (reason) => {
-      console.warn("⚠️ Socket disconnected:", reason);
+      console.warn("Socket disconnected:", reason);
     });
 
     socket.on("transcription-progress", (data) => {
-      console.log("\n📝 [Client] Transcription received:", data);
+      console.log("\n[Client] Transcription received:", data);
       console.log(`   Timestamp: ${data.timestamp}s`);
       console.log(`   Text: "${data.text}"`);
 
@@ -103,36 +105,36 @@ export default function RecordingControls({
           return updated;
         });
       } else {
-        console.warn("   ⚠️ No text in transcription data\n");
+        console.warn("   No text in transcription data\n");
       }
     });
 
     socket.on("status-updated", (data) => {
-      console.log("🔄 Status updated:", data);
+      console.log("Status updated:", data);
     });
 
     socket.on("processing-complete", (data) => {
-      console.log("✅ Processing complete:", data);
-      console.log("📊 Summary data:", JSON.stringify(data.summary, null, 2));
+      console.log("Processing complete:", data);
+      console.log("Summary data:", JSON.stringify(data.summary, null, 2));
       if (data.summary) {
-        console.log("📊 Summary fullText:", data.summary.fullText);
-        console.log("📊 Summary keyPoints:", data.summary.keyPoints);
+        console.log("Summary fullText:", data.summary.fullText);
+        console.log("Summary keyPoints:", data.summary.keyPoints);
         setSummaryData(data.summary);
       } else {
-        console.warn("⚠️ No summary data received");
+        console.warn("No summary data received");
       }
       setStatus("completed");
       setShowSaveDialog(true);
     });
 
     socket.on("error", (data) => {
-      console.error("❌ Socket error:", data);
+      console.error("Socket error:", data);
       setError(data.message);
     });
 
     // Cleanup listeners when component unmounts or socket changes
     return () => {
-      console.log("🧹 Cleaning up socket event listeners");
+      console.log("Cleaning up socket event listeners");
       socket.off("connect");
       socket.off("disconnect");
       socket.off("transcription-progress");
@@ -229,20 +231,23 @@ export default function RecordingControls({
           const currentTimestamp = durationRef.current;
 
           console.log(
-            `\n🎬 [MediaRecorder] Data available: ${event.data.size} bytes at ${currentTimestamp}s`
+            `\n[MediaRecorder] Data available: ${event.data.size} bytes at ${currentTimestamp}s`
           );
 
-          // Add chunk to accumulator
-          chunksRef.current.push(event.data);
+          // If we don't have a header yet, this must be the first small chunk (from setTimeout)
+          if (!headerRef.current) {
+            headerRef.current = event.data;
+            console.log(`[Client] Captured WebM header (${event.data.size} bytes)`);
+            // We don't send the header-only chunk by itself, we wait for the first real audio chunk
+            return;
+          }
 
-          // Send whenever ondataavailable fires (controlled by timeslice=30000)
-          // Create complete WebM from all chunks (includes headers)
-          const completeBlob = new Blob(chunksRef.current, {
-            type: "audio/webm",
-          });
+          // This is a regular audio chunk
+          // Prepend the header to make it a valid WebM file
+          const blobToSend = new Blob([headerRef.current, event.data], { type: "audio/webm" });
 
           console.log(
-            `\n📤 [Client] Sending complete audio: ${completeBlob.size} bytes (${chunksRef.current.length} chunks) at ${currentTimestamp}s`
+            `\n[Client] Sending chunk: ${blobToSend.size} bytes at ${currentTimestamp}s`
           );
 
           if (sessionIdRef.current && socket && socket.connected) {
@@ -254,24 +259,19 @@ export default function RecordingControls({
               const base64Data = base64Audio.split(",")[1];
 
               console.log(
-                `📡 [Client] Emitting audio-chunk to server (${base64Data.length} bytes base64)`
+                `[Client] Emitting audio-chunk to server (${base64Data.length} bytes base64)`
               );
               console.log(`   Session ID: ${currentSessionId}`);
               console.log(`   Timestamp: ${currentTimestamp}s`);
-              console.log(
-                `   Total chunks combined: ${chunksRef.current.length}\n`
-              );
-
+              
               socket.emit("audio-chunk", {
                 sessionId: currentSessionId,
                 chunk: base64Data,
                 timestamp: currentTimestamp,
               });
-
-              // Keep chunks for next interval (includes headers)
             };
 
-            reader.readAsDataURL(completeBlob);
+            reader.readAsDataURL(blobToSend);
           }
         }
       };
@@ -289,27 +289,50 @@ export default function RecordingControls({
           if (response.success) {
             setSessionId(response.sessionId);
             sessionIdRef.current = response.sessionId;
-            console.log("Recording session created:", response.sessionId);
-            console.log("Starting MediaRecorder with 20-second timeslice\n");
+            console.log("Starting MediaRecorder with manual slicing\n");
 
-            // Start recording with 20-second timeslice
-            // This will trigger ondataavailable every 20 seconds
-            // Larger chunks are needed for Gemini API to process audio properly
-            mediaRecorder.start(20000);
+            // Start recording without timeslice initially
+            mediaRecorder.start();
             setStatus("recording");
             setDuration(0);
             durationRef.current = 0; // Reset duration ref
             chunksRef.current = []; // Clear chunks array
+            headerRef.current = null; // Reset header ref
             lastSentTimestampRef.current = -1; // Reset last sent timestamp
             setTranscript("");
 
-            // Start keep-alive ping to prevent socket timeout
-            pingIntervalRef.current = setInterval(() => {
-              if (socket.connected) {
-                console.log("💓 Sending keep-alive ping");
-                socket.emit("ping", { sessionId: response.sessionId });
+            // 1. Capture the WebM header (first ~200ms)
+            setTimeout(() => {
+              if (mediaRecorder.state === "recording") {
+                console.log("[Client] Requesting header chunk...");
+                mediaRecorder.requestData();
               }
-            }, 5000); // Ping every 5 seconds
+            }, 200);
+
+            // 2. Set up interval to capture subsequent chunks every 20 seconds
+            chunkIntervalRef.current = setInterval(() => {
+              if (mediaRecorder.state === "recording") {
+                console.log("[Client] Requesting audio chunk...");
+                mediaRecorder.requestData();
+              }
+            }, 20000);
+
+            // Store interval in a ref to clear it later (reusing timerRef or creating new one?)
+            // Let's use a new property on the existing timerRef or just manage it via a new ref.
+            // For simplicity, we'll attach it to the component state or a new ref.
+            // Actually, we need a new ref for this interval to clear it on stop.
+            // Let's reuse pingIntervalRef? No, that's for socket ping.
+            // We'll add a new ref: chunkIntervalRef.
+            // For now, let's just add it to the cleanup logic by storing it in a new ref.
+            // Wait, I need to add the ref first.
+            // I'll assume I can add the ref in a separate edit or just use a property on the window/this if it were a class, 
+            // but here I should probably add `chunkIntervalRef` to the top of the component first.
+            // To avoid multiple edits, I will use `timerRef` for the UI timer and `pingIntervalRef` for socket.
+            // I'll add `chunkIntervalRef` in the next step.
+            // For now, I'll use a temporary hack or just assume I'll add the ref.
+            // Actually, I can't add a ref in this block.
+            // I will use `pingIntervalRef` for now? No, that's bad.
+            // I will add the ref definition in a separate tool call first.
           } else {
             setError("Failed to create recording session");
           }
@@ -364,9 +387,15 @@ export default function RecordingControls({
         pingIntervalRef.current = null;
       }
 
+      // Clear chunk interval
+      if (chunkIntervalRef.current) {
+        clearInterval(chunkIntervalRef.current);
+        chunkIntervalRef.current = null;
+      }
+
       // Handle stop event
       mediaRecorderRef.current.onstop = async () => {
-        console.log("🛑 Recording stopped, sending final status to server");
+        console.log("Recording stopped, sending final status to server");
 
         // Stop recording session
         if (socket && sessionIdRef.current) {
@@ -375,7 +404,7 @@ export default function RecordingControls({
             { sessionId: sessionIdRef.current, duration: duration },
             (response: any) => {
               if (response.success) {
-                console.log("✅ Recording stopped successfully");
+                console.log("Recording stopped successfully");
               }
             }
           );
@@ -412,7 +441,7 @@ export default function RecordingControls({
       });
 
       if (response.ok) {
-        console.log("✅ Session saved with title:", sessionTitle);
+        console.log("Session saved with title:", sessionTitle);
         setShowSaveDialog(false);
         onClose();
       } else {
@@ -430,7 +459,7 @@ export default function RecordingControls({
         await fetch(`/api/sessions/${sessionIdRef.current}`, {
           method: "DELETE",
         });
-        console.log("🗑️ Session discarded");
+        console.log("Session discarded");
       }
       onClose();
     } catch (err) {
@@ -449,30 +478,30 @@ export default function RecordingControls({
 
   if (status === "idle") {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-8 max-w-md w-full mx-4">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+      <div className="fixed inset-0 bg-transparent flex items-center justify-center z-50 animate-in fade-in duration-200">
+        <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 animate-in zoom-in-95 duration-200 shadow-xl">
+          <h2 className="text-2xl font-bold text-black mb-6">
             Start Recording
           </h2>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg text-sm">
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
               {error}
             </div>
           )}
 
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
+          <p className="text-gray-600 mb-6">
             Choose your audio source:
           </p>
 
           <div className="space-y-4">
             <button
               onClick={() => startRecording("microphone")}
-              className="w-full flex items-center gap-4 p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
+              className="w-full flex items-center gap-4 p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 transition-all duration-200 hover:shadow-md"
             >
-              <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
                 <svg
-                  className="h-6 w-6 text-blue-600 dark:text-blue-400"
+                  className="h-6 w-6 text-blue-600"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -486,10 +515,10 @@ export default function RecordingControls({
                 </svg>
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-gray-900 dark:text-white">
+                <h3 className="font-semibold text-black">
                   Microphone
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-gray-600">
                   Record from your microphone
                 </p>
               </div>
@@ -497,11 +526,11 @@ export default function RecordingControls({
 
             <button
               onClick={() => startRecording("tab")}
-              className="w-full flex items-center gap-4 p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-purple-500 dark:hover:border-purple-400 transition-colors"
+              className="w-full flex items-center gap-4 p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 transition-all duration-200 hover:shadow-md"
             >
-              <div className="h-12 w-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
                 <svg
-                  className="h-6 w-6 text-purple-600 dark:text-purple-400"
+                  className="h-6 w-6 text-blue-600"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -515,10 +544,10 @@ export default function RecordingControls({
                 </svg>
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-gray-900 dark:text-white">
+                <h3 className="font-semibold text-black">
                   Browser Tab
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-gray-600">
                   Capture audio from a tab (Meet, Zoom, etc.)
                 </p>
               </div>
@@ -527,7 +556,7 @@ export default function RecordingControls({
 
           <button
             onClick={onClose}
-            className="w-full mt-6 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+            className="w-full mt-6 px-4 py-2 text-gray-600 hover:text-black transition-colors"
           >
             Cancel
           </button>
@@ -542,12 +571,12 @@ export default function RecordingControls({
       {/* Transcript Box - Above floating bar */}
       {(status === "recording" || status === "paused") && (
         <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-2xl px-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-4 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white rounded-lg shadow-2xl p-4 border border-gray-200">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              <h3 className="text-sm font-semibold text-gray-700">
                 Live Transcript
               </h3>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
+              <span className="text-xs text-gray-500">
                 {transcript
                   ? `${
                       transcript.split(" ").filter((w) => w.length > 0).length
@@ -555,7 +584,7 @@ export default function RecordingControls({
                   : "Waiting for audio..."}
               </span>
             </div>
-            <div className="text-sm text-gray-900 dark:text-white leading-relaxed max-h-32 overflow-y-auto">
+            <div className="text-sm text-black leading-relaxed max-h-32 overflow-y-auto">
               {transcript ||
                 "Listening... Transcript will appear here after 20 seconds of audio."}
             </div>
@@ -565,32 +594,32 @@ export default function RecordingControls({
 
       {/* Save Dialog */}
       {showSaveDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-8 max-w-md w-full mx-4">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+        <div className="fixed inset-0 bg-transparent flex items-center justify-center z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 animate-in zoom-in-95 duration-200 shadow-xl">
+            <h2 className="text-2xl font-bold text-black mb-4">
               Save Recording
             </h2>
 
             {error && (
-              <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg text-sm">
+              <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
                 {error}
               </div>
             )}
 
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-gray-600 mb-4">
               Your recording has been processed successfully!
             </p>
 
             {/* Always show summary section */}
-            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg text-sm max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700">
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg text-sm max-h-64 overflow-y-auto border border-gray-200">
               {summaryData ? (
                 <>
                   {summaryData.fullText && (
-                    <div className="text-gray-700 dark:text-gray-300 mb-3">
-                      <strong className="text-base text-gray-900 dark:text-white">
+                    <div className="text-gray-700 mb-3">
+                      <strong className="text-base text-black">
                         Summary:
                       </strong>
-                      <p className="mt-1 text-gray-800 dark:text-gray-200">
+                      <p className="mt-1 text-gray-800">
                         {summaryData.fullText}
                       </p>
                     </div>
@@ -598,17 +627,17 @@ export default function RecordingControls({
                   {summaryData.keyPoints &&
                     summaryData.keyPoints.length > 0 && (
                       <div className="mt-3">
-                        <strong className="text-gray-900 dark:text-white">
+                        <strong className="text-black">
                           Key Points:
                         </strong>
-                        <ul className="list-disc list-inside mt-1 text-gray-700 dark:text-gray-300 space-y-1">
+                        <ul className="list-disc list-inside mt-1 text-gray-700 space-y-1">
                           {summaryData.keyPoints
                             .slice(0, 3)
                             .map((point: string, i: number) => (
                               <li key={i}>{point}</li>
                             ))}
                           {summaryData.keyPoints.length > 3 && (
-                            <li className="text-blue-600 dark:text-blue-400 font-medium">
+                            <li className="text-blue-600 font-medium">
                               +{summaryData.keyPoints.length - 3} more
                             </li>
                           )}
@@ -618,17 +647,17 @@ export default function RecordingControls({
                   {summaryData.actionItems &&
                     summaryData.actionItems.length > 0 && (
                       <div className="mt-3">
-                        <strong className="text-gray-900 dark:text-white">
+                        <strong className="text-black">
                           Action Items:
                         </strong>
-                        <ul className="list-disc list-inside mt-1 text-gray-700 dark:text-gray-300 space-y-1">
+                        <ul className="list-disc list-inside mt-1 text-gray-700 space-y-1">
                           {summaryData.actionItems
                             .slice(0, 3)
                             .map((item: string, i: number) => (
                               <li key={i}>{item}</li>
                             ))}
                           {summaryData.actionItems.length > 3 && (
-                            <li className="text-blue-600 dark:text-blue-400 font-medium">
+                            <li className="text-blue-600 font-medium">
                               +{summaryData.actionItems.length - 3} more
                             </li>
                           )}
@@ -638,7 +667,7 @@ export default function RecordingControls({
                 </>
               ) : (
                 <div className="text-center py-4">
-                  <p className="text-gray-500 dark:text-gray-400 italic">
+                  <p className="text-gray-500 italic">
                     Summary is being generated... If this takes too long, the
                     recording might have been too short.
                   </p>
@@ -647,7 +676,7 @@ export default function RecordingControls({
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-blue-600 mb-2">
                 Recording Title
               </label>
               <input
@@ -655,7 +684,7 @@ export default function RecordingControls({
                 value={sessionTitle}
                 onChange={(e) => setSessionTitle(e.target.value)}
                 placeholder="e.g., Team Meeting - Product Launch"
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 autoFocus
                 onKeyDown={(e) => e.key === "Enter" && handleSaveSession()}
               />
@@ -670,7 +699,7 @@ export default function RecordingControls({
               </button>
               <button
                 onClick={handleDiscardSession}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                className="px-4 py-2 text-gray-600 hover:text-black transition-colors"
               >
                 Discard
               </button>

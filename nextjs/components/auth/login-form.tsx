@@ -41,25 +41,25 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg dark:bg-gray-800">
+    <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+        <h2 className="text-3xl font-bold text-black">
           Welcome Back
         </h2>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
+        <p className="mt-2 text-blue-600">
           Sign in to your account
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="p-3 text-sm text-red-500 bg-red-100 rounded-lg dark:bg-red-900/30 dark:text-red-400">
+          <div className="p-3 text-sm text-red-700 bg-red-100 rounded-lg">
             {error}
           </div>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label className="block text-sm font-medium text-blue-600">
             Email
           </label>
           <input
@@ -67,13 +67,13 @@ export default function LoginForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full px-4 py-2 mt-1 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-lg bg-white text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             placeholder="you@example.com"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label className="block text-sm font-medium text-blue-600">
             Password
           </label>
           <input
@@ -81,7 +81,7 @@ export default function LoginForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full px-4 py-2 mt-1 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-lg bg-white text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             placeholder="••••••••"
           />
         </div>
@@ -95,11 +95,11 @@ export default function LoginForm() {
         </button>
       </form>
 
-      <div className="text-center text-sm text-gray-600 dark:text-gray-400">
+      <div className="text-center text-sm text-gray-600">
         Don&apos;t have an account?{" "}
         <Link
           href="/signup"
-          className="text-blue-600 hover:underline dark:text-blue-400"
+          className="text-blue-600 hover:underline"
         >
           Sign up
         </Link>

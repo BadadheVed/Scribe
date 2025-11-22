@@ -41,7 +41,7 @@ io.use(authenticateSocket);
 
 // Handle socket connections
 io.on("connection", (socket) => {
-  console.log(`\n🔌 [Connection] Client connected`);
+  console.log(`\n[Connection] Client connected`);
   console.log(`   Socket ID: ${socket.id}`);
   console.log(`   User ID: ${socket.data.userId}`);
   console.log(`   User Email: ${socket.data.userEmail}\n`);
@@ -50,7 +50,7 @@ io.on("connection", (socket) => {
   handleRecordingEvents(socket, io);
 
   socket.on("disconnect", () => {
-    console.log(`\n❌ [Disconnect] Client disconnected`);
+    console.log(`\n[Disconnect] Client disconnected`);
     console.log(`   Socket ID: ${socket.id}`);
     console.log(`   User ID: ${socket.data.userId}\n`);
   });
