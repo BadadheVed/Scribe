@@ -1,8 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
-import { io, Socket } from "socket.io-client";
+import { useState, useEffect } from "react";
 import RecordingControls from "../recording/recording-controls";
 import SessionDetailsModal from "./session-details-modal";
 
@@ -34,53 +33,7 @@ export default function DashboardClient({ user }: { user: User }) {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null
   );
-  const socketRef = useRef<Socket | null>(null);
 
-  // Initialize socket connection once when dashboard loads
-  useEffect(() => {
-    console.log("🔌 Initializing WebSocket connection for user:", user.id);
-
-    const socket = io(
-      process.env.NEXT_PUBLIC_WS_URL || "http://localhost:4000",
-      {
-        auth: { userId: user.id },
-        reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionAttempts: 5,
-      }
-    );
-
-    socket.on("connect", () => {
-      console.log("✅ WebSocket connected successfully");
-    });
-
-    socket.on("disconnect", () => {
-      console.log("WebSocket disconnected");
-    });
-
-    socket.on("error", (error) => {
-      console.error("❌ WebSocket error:", error);
-    });
-
-    socketRef.current = socket;
-
-    // Cleanup on unmount - don't disconnect, just remove listeners
-    return () => {
-      console.log(
-        "🔌 Cleaning up dashboard socket listeners (keeping connection alive)"
-      );
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("error");
-      // Only disconnect if user is actually leaving (not just hot reload)
-      if (
-        typeof window !== "undefined" &&
-        !window.location.pathname.startsWith("/dashboard")
-      ) {
-        socket.disconnect();
-      }
-    };
-  }, [user.id]);
 
   // Fetch user's recording sessions
   useEffect(() => {
@@ -401,9 +354,9 @@ export default function DashboardClient({ user }: { user: User }) {
       </main>
 
       {/* Recording Controls Modal */}
-      {showRecordingModal && socketRef.current && (
+      {showRecordingModal && (
         <RecordingControls
-          socket={socketRef.current}
+          user={user}
           onClose={handleCloseRecording}
         />
       )}

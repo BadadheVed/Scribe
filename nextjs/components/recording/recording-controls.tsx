@@ -1,11 +1,17 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Socket } from "socket.io-client";
+import { io, Socket } from "socket.io-client";
+
+interface User {
+  id: string;
+  name: string | null;
+  email: string;
+}
 
 interface RecordingControlsProps {
   onClose: () => void;
-  socket: Socket;
+  user: User;
 }
 
 type RecordingStatus =
@@ -18,7 +24,7 @@ type SourceType = "microphone" | "tab";
 
 export default function RecordingControls({
   onClose,
-  socket,
+  user,
 }: RecordingControlsProps) {
   const [status, setStatus] = useState<RecordingStatus>("idle");
   const [sourceType, setSourceType] = useState<SourceType>("microphone");
@@ -29,6 +35,7 @@ export default function RecordingControls({
   const [sessionTitle, setSessionTitle] = useState<string>("");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [summaryData, setSummaryData] = useState<any>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -39,17 +46,48 @@ export default function RecordingControls({
   const lastSentTimestampRef = useRef<number>(-1);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const socketInstanceRef = useRef<Socket | null>(null);
+
+  // Initialize socket connection when component mounts
+  useEffect(() => {
+    if (socketInstanceRef.current) return; // Prevent double initialization
+
+    console.log("🔌 Initializing WebSocket connection for recording...");
+    
+    const newSocket = io(
+      process.env.NEXT_PUBLIC_WS_URL || "http://localhost:4000",
+      {
+        auth: { userId: user.id },
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+        transports: ["websocket"], // Force WebSocket to avoid polling issues
+      }
+    );
+
+    socketInstanceRef.current = newSocket;
+    setSocket(newSocket);
+
+    return () => {
+      console.log("🔌 Disconnecting WebSocket...");
+      newSocket.disconnect();
+      socketInstanceRef.current = null;
+      setSocket(null);
+    };
+  }, [user.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Initialize socket event listeners
   useEffect(() => {
+    if (!socket) return;
+
     console.log("🎧 Setting up socket event listeners");
-    console.log("🔌 Socket connected:", socket.connected);
 
     socket.on("connect", () => {
-      console.log("✅ Socket reconnected during recording");
+      console.log("✅ Socket connected successfully");
     });
 
     socket.on("disconnect", (reason) => {
-      console.warn("⚠️ Socket disconnected during recording:", reason);
+      console.warn("⚠️ Socket disconnected:", reason);
     });
 
     socket.on("transcription-progress", (data) => {
@@ -92,7 +130,7 @@ export default function RecordingControls({
       setError(data.message);
     });
 
-    // Cleanup listeners when component unmounts
+    // Cleanup listeners when component unmounts or socket changes
     return () => {
       console.log("🧹 Cleaning up socket event listeners");
       socket.off("connect");
@@ -129,6 +167,11 @@ export default function RecordingControls({
   }, [status]);
 
   const startRecording = async (source: SourceType) => {
+    if (!socket || !socket.connected) {
+      setError("Socket not connected. Please wait a moment and try again.");
+      return;
+    }
+
     try {
       setError("");
       setSourceType(source);
@@ -234,46 +277,44 @@ export default function RecordingControls({
       };
 
       // Create recording session
-      if (socket) {
-        socket.emit(
-          "start-recording",
-          {
-            sourceType: source === "tab" ? "TAB_SHARE" : "MICROPHONE",
-            title: `${
-              source === "tab" ? "Tab" : "Mic"
-            } Recording ${new Date().toLocaleString()}`,
-          },
-          (response: any) => {
-            if (response.success) {
-              setSessionId(response.sessionId);
-              sessionIdRef.current = response.sessionId;
-              console.log("Recording session created:", response.sessionId);
-              console.log("Starting MediaRecorder with 20-second timeslice\n");
+      socket.emit(
+        "start-recording",
+        {
+          sourceType: source === "tab" ? "TAB_SHARE" : "MICROPHONE",
+          title: `${
+            source === "tab" ? "Tab" : "Mic"
+          } Recording ${new Date().toLocaleString()}`,
+        },
+        (response: any) => {
+          if (response.success) {
+            setSessionId(response.sessionId);
+            sessionIdRef.current = response.sessionId;
+            console.log("Recording session created:", response.sessionId);
+            console.log("Starting MediaRecorder with 20-second timeslice\n");
 
-              // Start recording with 20-second timeslice
-              // This will trigger ondataavailable every 20 seconds
-              // Larger chunks are needed for Gemini API to process audio properly
-              mediaRecorder.start(20000);
-              setStatus("recording");
-              setDuration(0);
-              durationRef.current = 0; // Reset duration ref
-              chunksRef.current = []; // Clear chunks array
-              lastSentTimestampRef.current = -1; // Reset last sent timestamp
-              setTranscript("");
+            // Start recording with 20-second timeslice
+            // This will trigger ondataavailable every 20 seconds
+            // Larger chunks are needed for Gemini API to process audio properly
+            mediaRecorder.start(20000);
+            setStatus("recording");
+            setDuration(0);
+            durationRef.current = 0; // Reset duration ref
+            chunksRef.current = []; // Clear chunks array
+            lastSentTimestampRef.current = -1; // Reset last sent timestamp
+            setTranscript("");
 
-              // Start keep-alive ping to prevent socket timeout
-              pingIntervalRef.current = setInterval(() => {
-                if (socket.connected) {
-                  console.log("💓 Sending keep-alive ping");
-                  socket.emit("ping", { sessionId: response.sessionId });
-                }
-              }, 5000); // Ping every 5 seconds
-            } else {
-              setError("Failed to create recording session");
-            }
+            // Start keep-alive ping to prevent socket timeout
+            pingIntervalRef.current = setInterval(() => {
+              if (socket.connected) {
+                console.log("💓 Sending keep-alive ping");
+                socket.emit("ping", { sessionId: response.sessionId });
+              }
+            }, 5000); // Ping every 5 seconds
+          } else {
+            setError("Failed to create recording session");
           }
-        );
-      }
+        }
+      );
     } catch (err: any) {
       console.error("Error starting recording:", err);
       if (err.name === "NotAllowedError") {

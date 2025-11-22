@@ -31,6 +31,9 @@ const io = new Server(httpServer, {
     origin: process.env.BETTER_AUTH_URL || "http://localhost:3000",
     credentials: true,
   },
+  pingTimeout: 60000, // 60 seconds
+  pingInterval: 25000, // 25 seconds
+  maxHttpBufferSize: 1e8, // 100 MB (allow large audio chunks)
 });
 
 // Authentication middleware for Socket.IO
