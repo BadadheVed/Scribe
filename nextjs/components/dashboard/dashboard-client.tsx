@@ -259,96 +259,163 @@ export default function DashboardClient({ user }: { user: User }) {
             </div>
           </div>
 
-          <div className="mt-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Recent Sessions
-            </h2>
-            <div className="bg-white border border-gray-200 shadow-sm overflow-hidden rounded-xl">
-              {loadingSessions ? (
-                <div className="px-4 py-5 sm:p-6 text-center text-gray-500">
-                  Loading sessions...
-                </div>
-              ) : sessions.length === 0 ? (
-                <div className="px-4 py-5 sm:p-6 text-center text-gray-500">
-                  No recording sessions yet. Click "Start Recording" to begin!
-                </div>
-              ) : (
-                <ul className="divide-y divide-gray-200">
-                  {sessions.map((session) => (
-                    <li key={session.id}>
-                      <button
-                        onClick={() => router.push(`/dashboard/sessions/${session.id}`)}
-                        className="w-full px-4 py-4 sm:px-6 hover:bg-gray-50 transition-colors text-left"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-base font-medium text-gray-900 truncate">
-                              {session.title || "Untitled Recording"}
-                            </h3>
-                            <div className="mt-2 flex items-center text-sm text-gray-500 gap-4">
-                              <span className="flex items-center gap-1">
-                                <svg
-                                  className="h-4 w-4"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                                  />
-                                </svg>
-                                {formatDuration(session.duration)}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <svg
-                                  className="h-4 w-4"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                  />
-                                </svg>
-                                {formatDate(session.createdAt)}
-                              </span>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                {session.sourceType}
-                              </span>
+          {/* Two-column layout for Recent Sessions and Recent Summaries */}
+          <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column - Recent Sessions */}
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                Recent Sessions
+              </h2>
+              <div className="bg-white border border-gray-200 shadow-sm overflow-hidden rounded-xl">
+                {loadingSessions ? (
+                  <div className="px-4 py-5 sm:p-6 text-center text-gray-500">
+                    Loading sessions...
+                  </div>
+                ) : sessions.length === 0 ? (
+                  <div className="px-4 py-5 sm:p-6 text-center text-gray-500">
+                    No recording sessions yet. Click "Start Recording" to begin!
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-gray-200">
+                    {sessions.slice(0, 5).map((session) => (
+                      <li key={session.id}>
+                        <button
+                          onClick={() => router.push(`/dashboard/sessions/${session.id}`)}
+                          className="w-full px-4 py-4 sm:px-6 hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-base font-medium text-gray-900 truncate">
+                                {session.title || "Untitled Recording"}
+                              </h3>
+                              <div className="mt-2 flex items-center text-sm text-gray-500 gap-4">
+                                <span className="flex items-center gap-1">
+                                  <svg
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
+                                  </svg>
+                                  {formatDuration(session.duration)}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <svg
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                    />
+                                  </svg>
+                                  {formatDate(session.createdAt)}
+                                </span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                  {session.sourceType}
+                                </span>
+                              </div>
                             </div>
-                            {session.summary && (
-                              <p className="mt-2 text-sm text-gray-600 line-clamp-2">
-                                {session.summary.fullText}
-                              </p>
-                            )}
+                            <div className="ml-4 shrink-0">
+                              <svg
+                                className="h-5 w-5 text-gray-400"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M9 5l7 7-7 7"
+                                />
+                              </svg>
+                            </div>
                           </div>
-                          <div className="ml-4 shrink-0">
-                            <svg
-                              className="h-5 w-5 text-gray-400"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9 5l7 7-7 7"
-                              />
-                            </svg>
-                          </div>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            {/* Right Column - Recent Summaries */}
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                Recent Summaries
+              </h2>
+              <div className="bg-white border border-gray-200 shadow-sm overflow-hidden rounded-xl">
+                {loadingSessions ? (
+                  <div className="px-4 py-5 sm:p-6 text-center text-gray-500">
+                    Loading summaries...
+                  </div>
+                ) : sessions.filter(s => s.summary).length === 0 ? (
+                  <div className="px-4 py-5 sm:p-6 text-center text-gray-500">
+                    No summaries yet. Complete a recording to generate a summary!
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-gray-200">
+                    {sessions
+                      .filter(s => s.summary)
+                      .slice(0, 5)
+                      .map((session) => (
+                        <li key={session.id}>
+                          <button
+                            onClick={() => router.push(`/dashboard/sessions/${session.id}`)}
+                            className="w-full px-4 py-4 sm:px-6 hover:bg-gray-50 transition-colors text-left"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-2">
+                                <h3 className="text-base font-medium text-gray-900 truncate">
+                                  {session.title || "Untitled Recording"}
+                                </h3>
+                                <span className="text-xs text-gray-500 ml-2 shrink-0">
+                                  {formatDate(session.createdAt)}
+                                </span>
+                              </div>
+                              {session.summary && (
+                                <>
+                                  <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                                    {session.summary.fullText}
+                                  </p>
+                                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                                    {session.summary.keyPoints && session.summary.keyPoints.length > 0 && (
+                                      <span className="flex items-center gap-1">
+                                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        {session.summary.keyPoints.length} key points
+                                      </span>
+                                    )}
+                                    {session.summary.actionItems && session.summary.actionItems.length > 0 && (
+                                      <span className="flex items-center gap-1">
+                                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                                        </svg>
+                                        {session.summary.actionItems.length} action items
+                                      </span>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </div>
         </div>
